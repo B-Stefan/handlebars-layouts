@@ -1,3 +1,48 @@
+
+## 1.2.0
+
+Features:
+
+- Ability to do something like this
+
+```hbs
+
+   {{#extend "layoutDefault"}}
+
+
+       {{#content "body" mode="append"}}
+
+           {{#embed "OtherEmbed" }}
+               {{#content "contentOfEmbend"}}
+
+
+                   <!-- Content for the context: layoutDefault  -->
+                   {{#block "content" searchRecursiveForActions=true}}
+
+                   {{/block}}
+
+               {{/content}}
+           {{/embed}}
+
+       {{/content}}
+
+
+   {{/extend}}
+
+
+
+  //Use:
+
+ {{#extend "layoutDefault"}}
+    {{#content "content"}}
+        <h1>Your content</h1>
+    {{/content}}
+ {{/extend}}
+
+
+```
+
+
 ## 1.1.0
 
 Features:

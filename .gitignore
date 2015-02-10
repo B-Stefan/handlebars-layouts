@@ -3,6 +3,7 @@ coverage/
 docs/
 node_modules/
 test/actual/
+.atlassian-ide-plugin
 
 *.log
 .*.swp
