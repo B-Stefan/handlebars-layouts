@@ -8,6 +8,51 @@ function getStack(context) {
 	return context._layoutStack || (context._layoutStack = []);
 }
 
+
+function getParentFromContext(context){
+	return context._parentContext ||null;
+}
+function getIsContextEmbed(context){
+	return context._isEmebed || false;
+
+}
+function getIsContextRoot(context){
+	var parent = getParentFromContext(context)
+	if(parent === null){
+		return false;
+
+	}else if (parent._name != undefined) {
+		return false
+	}
+	return true
+}
+
+
+function getNextTemplateContext(context){
+
+	//if current context template
+	if(!getIsContextEmbed(context)){
+		return context;
+	}
+	//Root is emebd not template
+	else if(getIsContextRoot(context) && getIsContextEmbed(context)){
+		return context;
+	}
+	//If we on top of the tree and not
+	else if(getIsContextRoot(context)){
+		throw new Error ("No next context can resolved"  + JSON.stringify(context))
+	}
+
+	//Search recursive
+	var parent = getParentFromContext(context)
+	if(!getIsContextEmbed(context)){
+		return parent;
+	}
+	else {
+		return getNextTemplateContext(parent)
+	}
+}
+
 function initActions(context) {
 	var stack = getStack(context),
 		actions = {};
@@ -91,14 +136,15 @@ function layouts(handlebars) {
 		 * @param {Object} options
 		 * @param {Function(Object)} options.fn
 		 * @param {Object} options.hash
+		 * @param {boolean} options.isEmbed - if the extend is called from a emebd
 		 * @return {String} Rendered partial.
 		 */
 		extend: function (name, options) {
 			options = options || {};
-
 			var fn = options.fn || noop,
 				context = Object.create(this || {}),
-				template = handlebars.partials[name];
+				template = handlebars.partials[name],
+				isEmbed = options.isEmbed
 
 			// Mix attributes into context
 			mixin(context, options.hash);
@@ -113,8 +159,17 @@ function layouts(handlebars) {
 				template = handlebars.compile(template);
 			}
 
+
 			// Add overrides to stack
 			getStack(context).push(fn);
+			context._isEmebed = isEmbed;
+
+			if(isEmbed==true){
+				context._parentContext = options.parentContext;
+			}else {
+				context._parentContext = this;
+			}
+			context._name = name;
 
 			// Render partial
 			return template(context);
@@ -124,15 +179,23 @@ function layouts(handlebars) {
 		 * @method embed
 		 * @return {String} Rendered partial.
 		 */
-		embed: function () {
+		embed: function (name, options) {
 			var context = Object.create(this || {});
-
+			var options = options ||{}
+			var hash = options.hash ||{}
+			var proxyActions = hash.proxyActions  ||false;
 			// Reset context
 			context._layoutStack = null;
 			context._layoutActions = null;
 
+
+
+			//If embed execute the template and remember the template
+			options.isEmbed = true;
+			options.parentContext = this;
+
 			// Extend
-			return helpers.extend.apply(context, arguments);
+			return helpers.extend.call(context, name, options);
 		},
 
 		/**
@@ -140,13 +203,42 @@ function layouts(handlebars) {
 		 * @param {String} name
 		 * @param {Object} options
 		 * @param {Function(Object)} options.fn
+		 * @param {boolean} options.hash.searchRecursiveForActions
+		 * @param {boolean} [options.hash.searchRecursiveForActionsDepth=1]
 		 * @return {String} Modified block content.
 		 */
 		block: function (name, options) {
 			options = options || {};
 
 			var fn = options.fn || noop,
-				context = this || {};
+				context = this || {},
+				hash = options.hash || {},
+				searchRecursiveForActions = hash.searchRecursiveForActions || false,
+				searchRecursiveForActionsDepth = hash.searchRecursiveForActionsDepth || 1;
+
+
+			/**
+			 * Search in the parent contexts for actions with the name
+			 * NOTICE: May performace issues with a hight searchRecursiveForActionsDepth
+			 */
+			if(searchRecursiveForActions){
+				var nextContext;
+				for(var i = 0; i<searchRecursiveForActionsDepth; i++){
+					nextContext = getParentFromContext(context);
+					//Break if on top of tree
+					if(nextContext == null ){
+						break;
+					}
+					var actions = getActionsByName(nextContext,name);
+					if(actions.length > 0 ){
+						context = nextContext;
+					}
+
+				}
+
+
+			}
+
 
 			return getActionsByName(context, name).reduce(
 				applyAction.bind(context),
